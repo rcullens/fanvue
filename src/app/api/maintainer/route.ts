@@ -15,12 +15,36 @@ export async function GET(req: NextRequest) {
   const adapter = getAdapter(adapterId);
 
   let metrics = data.maintainer.metrics;
+  let liveError: string | null = null;
   if (persona && (refresh || !metrics)) {
-    metrics = await adapter.fetchMetrics(persona, data.maintainer.pricing);
-    await updateStore((store) => {
-      store.maintainer.metrics = metrics;
-      store.maintainer.personaId = persona.id;
-    });
+    try {
+      metrics = await adapter.fetchMetrics(persona, data.maintainer.pricing);
+      await updateStore((store) => {
+        store.maintainer.metrics = metrics;
+        store.maintainer.personaId = persona.id;
+      });
+    } catch (err) {
+      liveError = err instanceof Error ? err.message : "Failed to fetch metrics";
+      if (adapterId === "live") {
+        return NextResponse.json({
+          maintainer: {
+            ...data.maintainer,
+            personaId: persona?.id ?? null,
+            metrics: data.maintainer.metrics,
+          },
+          persona,
+          proposal: null,
+          adapter: { id: adapter.id, label: adapter.label },
+          adapters: [
+            { id: "mock", label: "Mock adapter (simulated metrics)" },
+            { id: "checklist", label: "Manual checklist export" },
+            { id: "live", label: "Live Fanvue (OAuth API)" },
+          ],
+          liveError,
+        });
+      }
+      throw err;
+    }
   }
 
   const proposal = persona
@@ -35,10 +59,12 @@ export async function GET(req: NextRequest) {
     },
     persona,
     proposal,
+    liveError,
     adapter: { id: adapter.id, label: adapter.label },
     adapters: [
       { id: "mock", label: "Mock adapter (simulated metrics)" },
       { id: "checklist", label: "Manual checklist export" },
+      { id: "live", label: "Live Fanvue (OAuth API)" },
     ],
   });
 }
@@ -102,7 +128,7 @@ export async function POST(req: NextRequest) {
       store.maintainer.actionLog.unshift({
         id: crypto.randomUUID(),
         kind: "note",
-        summary: "Metrics refreshed (mock drift)",
+        summary: `Metrics refreshed (${adapter.id})`,
         applied: true,
         createdAt: new Date().toISOString(),
       });
@@ -141,38 +167,43 @@ export async function POST(req: NextRequest) {
     const result = await adapter.applyPricing(proposal, persona);
 
     const updated = await updateStore((store) => {
-      store.maintainer.metrics = {
-        ...store.maintainer.metrics,
-        currentSubPrice: proposal.subPrice,
-        suggestedTip: proposal.tipSuggest,
-        suggestedPpv: proposal.ppvPrice,
-        updatedAt: new Date().toISOString(),
-      };
-      // Sync persona base price locally when mock-applied
-      if (adapterId === "mock" && result.ok) {
-        const p = store.personas.find((x) => x.id === persona.id);
-        if (p) {
-          p.baseSubscriptionPrice = proposal.subPrice;
-          p.updatedAt = new Date().toISOString();
+      // Only mutate local prices when the adapter reports success
+      if (result.ok) {
+        store.maintainer.metrics = {
+          ...store.maintainer.metrics,
+          currentSubPrice: proposal.subPrice,
+          suggestedTip: proposal.tipSuggest,
+          suggestedPpv: proposal.ppvPrice,
+          updatedAt: new Date().toISOString(),
+        };
+        // Sync persona base price when mock or successful live apply
+        if (adapterId === "mock" || (adapterId === "live" && result.remote)) {
+          const p = store.personas.find((x) => x.id === persona.id);
+          if (p) {
+            p.baseSubscriptionPrice = proposal.subPrice;
+            p.updatedAt = new Date().toISOString();
+          }
         }
       }
       store.maintainer.actionLog.unshift(result.log);
-      store.maintainer.actionLog.unshift({
-        id: crypto.randomUUID(),
-        kind: "price_tip",
-        summary: `Tip suggest → $${proposal.tipSuggest}`,
-        applied: result.log.applied,
-        createdAt: new Date().toISOString(),
-        newValue: proposal.tipSuggest,
-      });
-      store.maintainer.actionLog.unshift({
-        id: crypto.randomUUID(),
-        kind: "price_ppv",
-        summary: `PPV → $${proposal.ppvPrice}`,
-        applied: result.log.applied,
-        createdAt: new Date().toISOString(),
-        newValue: proposal.ppvPrice,
-      });
+      if (result.ok) {
+        store.maintainer.actionLog.unshift({
+          id: crypto.randomUUID(),
+          kind: "price_tip",
+          summary: `Tip suggest → $${proposal.tipSuggest}`,
+          applied: result.log.applied && !result.remote,
+          createdAt: new Date().toISOString(),
+          newValue: proposal.tipSuggest,
+        });
+        store.maintainer.actionLog.unshift({
+          id: crypto.randomUUID(),
+          kind: "price_ppv",
+          summary: `PPV → $${proposal.ppvPrice}`,
+          applied: result.log.applied && !result.remote,
+          createdAt: new Date().toISOString(),
+          newValue: proposal.ppvPrice,
+        });
+      }
       store.maintainer.actionLog = store.maintainer.actionLog.slice(0, 100);
     });
 

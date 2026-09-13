@@ -1,6 +1,6 @@
 /**
- * Pluggable FanvueClient interface for a future real backend.
- * v1 ships MockFanvueAdapter only — no live Fanvue API writes.
+ * Pluggable FanvueClient interface.
+ * Adapters: mock, checklist, live (OAuth). Live never fakes remote success.
  */
 import {
   ActionLogEntry,
@@ -43,4 +43,4 @@ export interface FanvueClient {
   ): Promise<string>;
 }
 
-export type AdapterId = "mock" | "checklist";
+export type AdapterId = "mock" | "checklist" | "live";

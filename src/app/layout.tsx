@@ -17,7 +17,7 @@ const geistMono = localFont({
 export const metadata: Metadata = {
   title: "Fanvue AI Profile Studio",
   description:
-    "Create and manage 21+ AI creator bots for Fanvue — personas, chat sim, and ops panel.",
+    "Create and manage 21+ AI creator bots for Fanvue — personas, chat, automation, live OAuth.",
 };
 
 export default function RootLayout({
@@ -36,7 +36,7 @@ export default function RootLayout({
         </main>
         <footer className="mx-auto max-w-7xl px-4 pb-10 text-center text-[11px] text-[var(--muted)] sm:px-6">
           Fanvue AI Profile Studio · fictional 21+ adult personas only · no CSAM ·
-          v1 uses mock Fanvue adapters (no live API writes)
+          mock engine $0 by default · live Fanvue only when OAuth connected
         </footer>
       </body>
     </html>

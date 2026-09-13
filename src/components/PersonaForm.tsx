@@ -10,7 +10,10 @@ type Props = {
   onCancel?: () => void;
 };
 
-type FormState = Omit<Persona, "id" | "createdAt" | "updatedAt" | "isActive" | "tags"> & {
+type FormState = Omit<
+  Persona,
+  "id" | "createdAt" | "updatedAt" | "isActive" | "tags" | "ppvCatalog" | "salesPolicy"
+> & {
   tagsText: string;
 };
 

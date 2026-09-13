@@ -35,6 +35,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# local JSON store runtime
+# local JSON store runtime + secrets
 data/store.json
 data/*.tmp
+data/fanvue-tokens.json
+data/fanvue-tokens.json.tmp

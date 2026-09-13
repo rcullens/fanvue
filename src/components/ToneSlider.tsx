@@ -17,13 +17,13 @@ function labelFor(v: number): string {
 
 export function ToneSlider({ value, onChange, disabled, compact }: Props) {
   return (
-    <div className={compact ? "" : "card p-5"}>
+    <div className={compact ? "" : "card-glow space-y-3 p-5"}>
       {!compact && (
-        <div className="mb-3 flex items-end justify-between gap-3">
+        <div className="flex items-end justify-between gap-3">
           <div>
             <h3 className="text-sm font-semibold text-white">Content tone</h3>
             <p className="mt-0.5 text-xs text-[var(--muted)]">
-              Left = friendly SFW · Right = NSFW XXX (21+ fictional only)
+              SFW friendly ↔ NSFW XXX · 21+ fictional only
             </p>
           </div>
           <span className="badge bg-violet-500/20 text-violet-200">
@@ -31,13 +31,11 @@ export function ToneSlider({ value, onChange, disabled, compact }: Props) {
           </span>
         </div>
       )}
-      {compact && (
-        <div className="mb-2 flex justify-between text-xs text-[var(--muted)]">
-          <span>Friendly</span>
-          <span className="text-violet-200">{labelFor(value)}</span>
-          <span>NSFW XXX</span>
-        </div>
-      )}
+      <div className="flex items-center justify-between text-[11px] font-medium tracking-wide">
+        <span className="text-emerald-300/90">SFW</span>
+        <span className="text-violet-200">{labelFor(value)}</span>
+        <span className="text-rose-300/90">XXX</span>
+      </div>
       <input
         type="range"
         min={0}
@@ -46,10 +44,10 @@ export function ToneSlider({ value, onChange, disabled, compact }: Props) {
         disabled={disabled}
         onChange={(e) => onChange(Number(e.target.value))}
         className="tone-slider w-full"
-        aria-label="Content tone slider"
+        aria-label="Content tone slider SFW to XXX"
       />
       {!compact && (
-        <div className="mt-2 flex justify-between text-[11px] text-[var(--muted)]">
+        <div className="flex justify-between text-[10px] uppercase tracking-wider text-[var(--muted)]">
           <span>Friendly</span>
           <span>Flirty</span>
           <span>Suggestive</span>

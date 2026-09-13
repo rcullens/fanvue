@@ -1,4 +1,5 @@
 import { mockAdapter } from "./mock-adapter";
+import { liveAdapter } from "./live-adapter";
 import { FanvueClient } from "./fanvue-client";
 import { MetricsSnapshot, Persona, PricingConfig } from "../types";
 import { computePriceProposal } from "../pricing";
@@ -55,5 +56,6 @@ export const checklistAdapter = new ChecklistAdapter();
 
 export function getAdapter(id: string): FanvueClient {
   if (id === "checklist") return checklistAdapter;
+  if (id === "live") return liveAdapter;
   return mockAdapter;
 }

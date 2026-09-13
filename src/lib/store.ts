@@ -1,6 +1,6 @@
 /**
  * JSON file persistence under data/store.json.
- * Simple, reliable, no DB server required for v1.
+ * Simple, reliable, no DB server — $0 local path.
  */
 import { promises as fs } from "fs";
 import path from "path";
@@ -11,6 +11,7 @@ import {
   AppSettings,
   MaintainerState,
   defaultMetrics,
+  normalizePersona,
 } from "./types";
 
 const DATA_DIR = path.join(process.cwd(), "data");
@@ -30,7 +31,42 @@ function defaultStore(): StoreData {
     settings: {
       activePersonaId: null,
       openaiConfigured: Boolean(process.env.OPENAI_API_KEY),
+      replyEngine: process.env.OPENAI_API_KEY ? "openai-compatible" : "mock",
     },
+    automationQueue: [],
+    automationLog: [],
+    fanSales: {},
+  };
+}
+
+function migrate(parsed: Partial<StoreData>): StoreData {
+  const base = defaultStore();
+  const personas = (parsed.personas || []).map((p) =>
+    normalizePersona(p as Persona)
+  );
+  return {
+    ...base,
+    ...parsed,
+    personas,
+    chatSessions: parsed.chatSessions || {},
+    maintainer: {
+      ...base.maintainer,
+      ...(parsed.maintainer || {}),
+      pricing: { ...DEFAULT_PRICING, ...(parsed.maintainer?.pricing || {}) },
+      metrics: parsed.maintainer?.metrics || defaultMetrics(),
+      actionLog: parsed.maintainer?.actionLog || [],
+    },
+    settings: {
+      ...base.settings,
+      ...(parsed.settings || {}),
+      openaiConfigured: Boolean(process.env.OPENAI_API_KEY),
+      replyEngine:
+        parsed.settings?.replyEngine ||
+        (process.env.OPENAI_API_KEY ? "openai-compatible" : "mock"),
+    },
+    automationQueue: parsed.automationQueue || [],
+    automationLog: parsed.automationLog || [],
+    fanSales: parsed.fanSales || {},
   };
 }
 
@@ -42,12 +78,8 @@ export async function readStore(): Promise<StoreData> {
   await ensureDir();
   try {
     const raw = await fs.readFile(STORE_PATH, "utf8");
-    const parsed = JSON.parse(raw) as StoreData;
-    parsed.settings = {
-      ...parsed.settings,
-      openaiConfigured: Boolean(process.env.OPENAI_API_KEY),
-    };
-    return parsed;
+    const parsed = JSON.parse(raw) as Partial<StoreData>;
+    return migrate(parsed);
   } catch {
     const fresh = defaultStore();
     await writeStore(fresh);
@@ -84,7 +116,9 @@ export async function getPersona(id: string): Promise<Persona | undefined> {
 export async function getActivePersona(): Promise<Persona | null> {
   const data = await readStore();
   if (!data.settings.activePersonaId) return null;
-  return data.personas.find((p) => p.id === data.settings.activePersonaId) ?? null;
+  return (
+    data.personas.find((p) => p.id === data.settings.activePersonaId) ?? null
+  );
 }
 
 export async function getSettings(): Promise<AppSettings> {

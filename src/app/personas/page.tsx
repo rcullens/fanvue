@@ -57,10 +57,10 @@ export default function PersonasPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold text-white">Personas</h1>
-        <p className="text-sm text-[var(--muted)]">
-          Build AI creator profiles · age minimum 21 · tone & mistake rate persist
-          per profile
+        <h1 className="page-title">Personas</h1>
+        <p className="page-sub">
+          Build AI creator packs · age minimum 21 · tone & mistake rate · used by
+          chat + automation
         </p>
       </div>
 

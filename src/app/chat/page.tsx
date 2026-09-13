@@ -22,9 +22,10 @@ export default function ChatPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold text-white">Chat simulation</h1>
-        <p className="text-sm text-[var(--muted)]">
-          Hyperrealistic in-character replies · tone slider · mock or OpenAI-compatible
+        <h1 className="page-title">Chat simulation</h1>
+        <p className="page-sub">
+          Hyperrealistic replies · SFW↔XXX tone · local mock ($0) or free
+          OpenAI-compatible providers
         </p>
       </div>
       <ChatPanel

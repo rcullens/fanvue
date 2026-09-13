@@ -52,7 +52,6 @@ export function ChatPanel({ personas, activePersonaId, onPersonaMetaChange }: Pr
     const content = input.trim();
     setInput("");
     setBusy(true);
-    // Optimistic user bubble
     const optimistic: ChatMessage = {
       id: "tmp-" + Date.now(),
       role: "user",
@@ -103,11 +102,12 @@ export function ChatPanel({ personas, activePersonaId, onPersonaMetaChange }: Pr
 
   if (!personas.length) {
     return (
-      <div className="card flex flex-col items-center justify-center gap-3 p-12 text-center">
+      <div className="empty-state">
         <div className="text-4xl opacity-40">💬</div>
         <h3 className="text-lg font-semibold">No persona to chat with</h3>
         <p className="text-sm text-[var(--muted)]">
-          Create a 21+ AI creator profile in Personas first.
+          Create a 21+ AI creator profile in Personas first. Local mock engine
+          works with $0 — no API key needed.
         </p>
         <a href="/personas" className="btn-primary">
           Go to Personas
@@ -117,7 +117,7 @@ export function ChatPanel({ personas, activePersonaId, onPersonaMetaChange }: Pr
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
+    <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
       <aside className="space-y-4">
         <div className="card p-4">
           <label className="label">Active chat persona</label>
@@ -128,7 +128,7 @@ export function ChatPanel({ personas, activePersonaId, onPersonaMetaChange }: Pr
           >
             {personas.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.name} ({p.age})
+                {p.name} ({p.age}+)
               </option>
             ))}
           </select>
@@ -139,18 +139,13 @@ export function ChatPanel({ personas, activePersonaId, onPersonaMetaChange }: Pr
           )}
         </div>
 
-        {persona && (
-          <ToneSlider
-            value={persona.contentTone}
-            onChange={updateTone}
-          />
-        )}
+        {persona && <ToneSlider value={persona.contentTone} onChange={updateTone} />}
 
         <div className="card space-y-2 p-4 text-xs text-[var(--muted)]">
           <div className="flex justify-between">
             <span>Reply engine</span>
             <span className="text-white/80">
-              {openaiConfigured ? "OpenAI-compatible" : "Local mock"}
+              {openaiConfigured ? "OpenAI-compatible" : "Local mock ($0)"}
             </span>
           </div>
           {source && (
@@ -166,9 +161,9 @@ export function ChatPanel({ personas, activePersonaId, onPersonaMetaChange }: Pr
             </div>
           )}
           <p className="pt-1 leading-relaxed">
-            Mock mode works without an API key. Optional: set{" "}
-            <code className="text-violet-200">OPENAI_API_KEY</code> in{" "}
-            <code className="text-violet-200">.env.local</code>.
+            Default is free local mock. Optional free/cheap endpoints via{" "}
+            <code className="text-violet-200">OPENAI_BASE_URL</code> (Ollama,
+            Groq, Gemini compat).
           </p>
         </div>
       </aside>
@@ -191,8 +186,8 @@ export function ChatPanel({ personas, activePersonaId, onPersonaMetaChange }: Pr
         <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
           {!messages.length && (
             <div className="flex h-full flex-col items-center justify-center text-center text-sm text-[var(--muted)]">
-              <p>Say hi — the bot replies in character.</p>
-              <p className="mt-1 text-xs">Adult (21+) roleplay only.</p>
+              <p className="text-base text-white/80">Say hi — the bot replies in character.</p>
+              <p className="mt-1 text-xs">Adult (21+) roleplay only · mock engine is free</p>
             </div>
           )}
           {messages.map((m) => (
@@ -201,11 +196,9 @@ export function ChatPanel({ personas, activePersonaId, onPersonaMetaChange }: Pr
               className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
             >
               <div
-                className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
-                  m.role === "user"
-                    ? "bg-violet-500/30 text-violet-50"
-                    : "bg-white/5 text-white/90"
-                }`}
+                className={
+                  m.role === "user" ? "chat-bubble-user" : "chat-bubble-bot"
+                }
               >
                 {m.content}
               </div>
@@ -213,18 +206,17 @@ export function ChatPanel({ personas, activePersonaId, onPersonaMetaChange }: Pr
           ))}
           {busy && (
             <div className="flex justify-start">
-              <div className="rounded-2xl bg-white/5 px-3.5 py-2.5 text-sm text-[var(--muted)]">
-                typing…
+              <div className="chat-bubble-bot flex items-center gap-1.5 !py-3">
+                <span className="typing-dot" />
+                <span className="typing-dot [animation-delay:150ms]" />
+                <span className="typing-dot [animation-delay:300ms]" />
               </div>
             </div>
           )}
           <div ref={bottomRef} />
         </div>
 
-        <form
-          onSubmit={send}
-          className="flex gap-2 border-t border-white/10 p-3"
-        >
+        <form onSubmit={send} className="flex gap-2 border-t border-white/10 p-3">
           <input
             className="input flex-1"
             placeholder="Message…"

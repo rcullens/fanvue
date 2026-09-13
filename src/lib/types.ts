@@ -1,6 +1,40 @@
 /** Fanvue AI Profile Studio — shared types. Age floor is 21 everywhere. */
 
 export const MIN_AGE = 21;
+/** Fanvue chat PPV minimum (cents). */
+export const MIN_PPV_CENTS = 300;
+
+export interface PpvCatalogItem {
+  id: string;
+  title: string;
+  description: string;
+  /** Price in USD cents; Fanvue message PPV min 300 ($3.00) */
+  priceCents: number;
+  mediaUuids?: string[];
+  pitchHints?: string;
+}
+
+export interface QuietHours {
+  /** "HH:MM" 24h local-ish (studio clock) */
+  start: string;
+  end: string;
+}
+
+export interface SalesPolicy {
+  maxPpvOffersPerDay: number;
+  minMessagesBeforePitch: number;
+  cooldownHoursAfterOfferOrPurchase: number;
+  /** Default false — safer; queue for approval */
+  allowAutoSend: boolean;
+  quietHours?: QuietHours;
+}
+
+export const DEFAULT_SALES_POLICY: SalesPolicy = {
+  maxPpvOffersPerDay: 3,
+  minMessagesBeforePitch: 2,
+  cooldownHoursAfterOfferOrPurchase: 12,
+  allowAutoSend: false,
+};
 
 export interface Persona {
   id: string;
@@ -22,6 +56,10 @@ export interface Persona {
   contentTone: number;
   /** 0–1 probability of typos/filler in mock replies */
   mistakeRate: number;
+  /** PPV offers the automation worker can attach */
+  ppvCatalog: PpvCatalogItem[];
+  /** When/whether to pitch PPV + auto-send */
+  salesPolicy: SalesPolicy;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -62,6 +100,8 @@ export interface MetricsSnapshot {
   suggestedTip: number;
   suggestedPpv: number;
   updatedAt: string;
+  dataSource?: "mock" | "live" | "live-partial";
+  liveLabel?: string;
 }
 
 export type ActionKind =
@@ -70,7 +110,8 @@ export type ActionKind =
   | "price_ppv"
   | "status"
   | "note"
-  | "checklist";
+  | "checklist"
+  | "automation";
 
 export interface ActionLogEntry {
   id: string;
@@ -94,6 +135,53 @@ export interface MaintainerState {
 export interface AppSettings {
   activePersonaId: string | null;
   openaiConfigured: boolean;
+  /** Prefer mock ($0) unless explicitly using a free/cheap OpenAI-compatible endpoint */
+  replyEngine: "mock" | "openai-compatible";
+}
+
+export type AutomationQueueStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "sent"
+  | "failed";
+
+export interface AutomationQueueItem {
+  id: string;
+  personaId: string;
+  fanUserUuid: string;
+  fanHandle?: string;
+  fanDisplayName?: string;
+  inboundText: string;
+  draftText: string;
+  ppvItemId?: string | null;
+  ppvPriceCents?: number | null;
+  ppvMediaUuids?: string[];
+  status: AutomationQueueStatus;
+  mode: "mock" | "live";
+  source: "webhook" | "manual" | "unread-pull" | "simulate";
+  error?: string;
+  remoteMessageUuid?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AutomationLogEntry {
+  id: string;
+  kind: "draft" | "send" | "reject" | "policy_block" | "webhook" | "run" | "error";
+  summary: string;
+  detail?: string;
+  queueId?: string;
+  createdAt: string;
+}
+
+export interface FanSalesState {
+  fanUserUuid: string;
+  messageCount: number;
+  offersToday: number;
+  offersDayKey: string; // YYYY-MM-DD
+  lastOfferAt?: string;
+  lastPurchaseAt?: string;
 }
 
 export interface StoreData {
@@ -101,6 +189,10 @@ export interface StoreData {
   chatSessions: Record<string, ChatSession>;
   maintainer: MaintainerState;
   settings: AppSettings;
+  automationQueue: AutomationQueueItem[];
+  automationLog: AutomationLogEntry[];
+  /** Per-fan sales counters for policy */
+  fanSales: Record<string, FanSalesState>;
 }
 
 export const DEFAULT_PRICING: PricingConfig = {
@@ -126,6 +218,7 @@ export function defaultMetrics(basePrice = 9.99): MetricsSnapshot {
     suggestedTip: 10,
     suggestedPpv: 12.99,
     updatedAt: new Date().toISOString(),
+    dataSource: "mock",
   };
 }
 
@@ -149,9 +242,25 @@ export function emptyPersona(partial?: Partial<Persona>): Persona {
     tags: [],
     contentTone: 25,
     mistakeRate: 0.18,
+    ppvCatalog: [],
+    salesPolicy: { ...DEFAULT_SALES_POLICY },
     isActive: false,
     createdAt: now,
     updatedAt: now,
     ...partial,
+  };
+}
+
+/** Migrate older store personas missing pack fields */
+export function normalizePersona(p: Persona): Persona {
+  return {
+    ...emptyPersona(),
+    ...p,
+    ppvCatalog: Array.isArray(p.ppvCatalog) ? p.ppvCatalog : [],
+    salesPolicy: {
+      ...DEFAULT_SALES_POLICY,
+      ...(p.salesPolicy || {}),
+      allowAutoSend: p.salesPolicy?.allowAutoSend === true,
+    },
   };
 }
