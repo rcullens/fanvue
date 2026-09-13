@@ -73,18 +73,34 @@ export async function POST(req: NextRequest) {
     updatedAt: now,
   };
 
-  const { content: reply, source } = await generateReply(
-    persona,
-    session.messages,
-    content
-  );
-
-  const assistantMsg: ChatMessage = {
-    id: crypto.randomUUID(),
-    role: "assistant",
+  const {
     content: reply,
-    createdAt: new Date().toISOString(),
-  };
+    source,
+    bubbles,
+    typingMs,
+  } = await generateReply(persona, session.messages, content);
+
+  // Persist as separate assistant messages when multi-bubble (mock human feel)
+  const bubbleList =
+    bubbles && bubbles.length > 1
+      ? bubbles
+      : reply.split(/\n\n+/).map((b) => b.trim()).filter(Boolean);
+  const assistantMsgs: ChatMessage[] =
+    bubbleList.length > 1
+      ? bubbleList.map((b) => ({
+          id: crypto.randomUUID(),
+          role: "assistant" as const,
+          content: b,
+          createdAt: new Date().toISOString(),
+        }))
+      : [
+          {
+            id: crypto.randomUUID(),
+            role: "assistant" as const,
+            content: reply,
+            createdAt: new Date().toISOString(),
+          },
+        ];
 
   await updateStore((store) => {
     const prev = store.chatSessions[personaId] ?? {
@@ -94,7 +110,7 @@ export async function POST(req: NextRequest) {
     };
     store.chatSessions[personaId] = {
       personaId,
-      messages: [...prev.messages, userMsg, assistantMsg].slice(-200),
+      messages: [...prev.messages, userMsg, ...assistantMsgs].slice(-200),
       updatedAt: new Date().toISOString(),
     };
   });
@@ -103,5 +119,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     messages: fresh.chatSessions[personaId].messages,
     source,
+    bubbles: assistantMsgs.map((m) => m.content),
+    typingMs,
   });
 }

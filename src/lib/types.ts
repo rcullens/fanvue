@@ -157,6 +157,10 @@ export interface AutomationQueueItem {
   ppvItemId?: string | null;
   ppvPriceCents?: number | null;
   ppvMediaUuids?: string[];
+  /** Why pitched / why not — from sales policy */
+  policyReason?: string;
+  /** tease | soft | direct when pitched */
+  pitchStyle?: "tease" | "soft" | "direct";
   status: AutomationQueueStatus;
   mode: "mock" | "live";
   source: "webhook" | "manual" | "unread-pull" | "simulate";

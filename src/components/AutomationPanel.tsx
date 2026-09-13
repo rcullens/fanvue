@@ -29,6 +29,7 @@ export function AutomationPanel() {
   const [data, setData] = useState<Bundle | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [messageTone, setMessageTone] = useState<"ok" | "warn" | "err">("ok");
   const [simText, setSimText] = useState("hey :) how are you tonight?");
   const [policy, setPolicy] = useState<SalesPolicy>(DEFAULT_SALES_POLICY);
   const [catalog, setCatalog] = useState<PpvCatalogItem[]>([]);
@@ -43,6 +44,11 @@ export function AutomationPanel() {
         ...DEFAULT_SALES_POLICY,
         ...json.activePersona.salesPolicy,
         allowAutoSend: json.activePersona.salesPolicy?.allowAutoSend === true,
+        minMessagesBeforePitch: Math.max(
+          2,
+          json.activePersona.salesPolicy?.minMessagesBeforePitch ??
+            DEFAULT_SALES_POLICY.minMessagesBeforePitch
+        ),
       });
       setCatalog(json.activePersona.ppvCatalog || []);
     }
@@ -62,15 +68,21 @@ export function AutomationPanel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           personaId: data.activePersona.id,
-          salesPolicy: policy,
+          salesPolicy: {
+            ...policy,
+            minMessagesBeforePitch: Math.max(2, policy.minMessagesBeforePitch),
+            allowAutoSend: policy.allowAutoSend === true,
+          },
           ppvCatalog: catalog,
         }),
       });
       const json = await res.json();
       if (!res.ok) {
+        setMessageTone("err");
         setMessage(json.error || "Save failed");
         return;
       }
+      setMessageTone("ok");
       setMessage("Persona pack saved (policy + PPV catalog).");
       await load();
     } finally {
@@ -93,15 +105,30 @@ export function AutomationPanel() {
       });
       const json = await res.json();
       if (!res.ok) {
+        setMessageTone("err");
         setMessage(json.error || "Run failed");
       } else if (action === "simulate") {
+        setMessageTone("ok");
+        const reason = json.queueItem?.policyReason
+          ? ` · ${json.queueItem.policyReason}`
+          : "";
         setMessage(
           json.autoSent
-            ? "Simulated & auto-sent (mock)."
-            : "Simulated draft queued for approval ($0 mock)."
+            ? `Simulated & auto-sent (mock).${reason}`
+            : `Simulated draft queued for approval ($0 mock).${reason}`
+        );
+      } else if (json.empty || json.processed === 0) {
+        setMessageTone("warn");
+        setMessage(
+          json.message ||
+            "No unread chats to draft. Inbox clear, or last messages were yours."
         );
       } else {
-        setMessage(`Drafted ${json.processed} unread chat(s).`);
+        setMessageTone("ok");
+        setMessage(
+          json.message ||
+            `Drafted ${json.processed} unread chat(s) for approval.`
+        );
       }
       await load();
     } finally {
@@ -118,13 +145,17 @@ export function AutomationPanel() {
         body: JSON.stringify({ text: editDrafts[id] }),
       });
       const json = await res.json();
-      if (!res.ok) setMessage(json.error || "Approve failed");
-      else
+      if (!res.ok) {
+        setMessageTone("err");
+        setMessage(json.error || "Approve failed");
+      } else {
+        setMessageTone("ok");
         setMessage(
           json.remote
             ? "Sent live to Fanvue."
             : "Marked sent in mock (no remote write)."
         );
+      }
       await load();
     } finally {
       setBusy(false);
@@ -182,10 +213,24 @@ export function AutomationPanel() {
   const origin =
     typeof window !== "undefined" ? window.location.origin : "https://your-host";
 
+  const toneHint =
+    data.activePersona.contentTone < 35
+      ? "tease pitches (softened)"
+      : data.activePersona.contentTone < 70
+        ? "soft offers"
+        : "direct PPV";
+
+  const bannerClass =
+    messageTone === "err"
+      ? "border-rose-500/30 bg-rose-500/10 text-rose-100"
+      : messageTone === "warn"
+        ? "border-amber-500/30 bg-amber-500/10 text-amber-100"
+        : "border-violet-500/30 bg-violet-500/10 text-violet-100";
+
   return (
     <div className="space-y-4">
       {message && (
-        <div className="rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-3 text-sm text-violet-100">
+        <div className={`rounded-xl border px-4 py-3 text-sm ${bannerClass}`}>
           {message}
         </div>
       )}
@@ -197,8 +242,8 @@ export function AutomationPanel() {
           </div>
           <p className="text-xs text-[var(--muted)]">
             {data.connected
-              ? "Fanvue connected — pull unread / approve can send live"
-              : "Mock mode ($0) — simulate fans without Fanvue credentials"}
+              ? `Fanvue connected — Pull unread drafts live chats · tone → ${toneHint}`
+              : `Mock mode ($0) — simulate fans · tone → ${toneHint}`}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -226,8 +271,8 @@ export function AutomationPanel() {
           <div>
             <h3 className="font-semibold">Sales policy</h3>
             <p className="text-xs text-[var(--muted)]">
-              Policy decides WHETHER to pitch; the model only writes the line.
-              Auto-send defaults OFF.
+              Policy decides WHETHER to pitch (never on first message). Tone
+              picks tease → soft → direct. Auto-send defaults OFF.
             </p>
           </div>
           <label className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm">
@@ -261,15 +306,19 @@ export function AutomationPanel() {
               />
             </div>
             <div>
-              <label className="label">Min msgs before pitch</label>
+              <label className="label">Min msgs before pitch (≥2)</label>
               <input
                 type="number"
+                min={2}
                 className="input"
                 value={policy.minMessagesBeforePitch}
                 onChange={(e) =>
                   setPolicy((p) => ({
                     ...p,
-                    minMessagesBeforePitch: Number(e.target.value),
+                    minMessagesBeforePitch: Math.max(
+                      2,
+                      Number(e.target.value) || 2
+                    ),
                   }))
                 }
               />
@@ -489,16 +538,49 @@ export function AutomationPanel() {
               >
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--muted)]">
                   <span>
-                    {q.fanDisplayName || q.fanHandle || q.fanUserUuid} ·{" "}
-                    <span className="text-violet-200">{q.mode}</span> · {q.source}
+                    <span className="text-white/90">
+                      {q.fanDisplayName || q.fanHandle || "fan"}
+                    </span>{" "}
+                    · id{" "}
+                    <code className="text-violet-200">
+                      {q.fanUserUuid.slice(0, 12)}
+                      {q.fanUserUuid.length > 12 ? "…" : ""}
+                    </code>{" "}
+                    · <span className="text-violet-200">{q.mode}</span> ·{" "}
+                    {q.source}
                   </span>
-                  {q.ppvItemId && (
-                    <span className="badge bg-fuchsia-500/20 text-fuchsia-200">
-                      PPV {(q.ppvPriceCents || 0) / 100}$
-                    </span>
-                  )}
+                  <span className="flex flex-wrap gap-1">
+                    {q.pitchStyle && (
+                      <span className="badge bg-sky-500/20 text-sky-200">
+                        {q.pitchStyle}
+                      </span>
+                    )}
+                    {q.ppvItemId ? (
+                      <span className="badge bg-fuchsia-500/20 text-fuchsia-200">
+                        PPV {((q.ppvPriceCents || 0) / 100).toFixed(2)}$
+                      </span>
+                    ) : (
+                      <span className="badge bg-white/10 text-white/60">
+                        reply-only
+                      </span>
+                    )}
+                  </span>
                 </div>
-                <p className="text-xs text-[var(--muted)]">Fan: {q.inboundText}</p>
+                {q.policyReason && (
+                  <p
+                    className={`mb-2 rounded-lg px-2.5 py-1.5 text-[11px] ${
+                      q.ppvItemId
+                        ? "bg-fuchsia-500/10 text-fuchsia-100"
+                        : "bg-white/5 text-[var(--muted)]"
+                    }`}
+                  >
+                    Policy: {q.policyReason}
+                  </p>
+                )}
+                <p className="text-xs text-[var(--muted)]">
+                  Last / inbound:{" "}
+                  <span className="text-white/80">{q.inboundText}</span>
+                </p>
                 <textarea
                   className="input mt-2 min-h-[88px]"
                   value={editDrafts[q.id] ?? q.draftText}
@@ -536,6 +618,9 @@ export function AutomationPanel() {
             {data.log.map((e) => (
               <li key={e.id} className="py-2">
                 <div className="font-medium text-white/90">{e.summary}</div>
+                {e.detail && (
+                  <div className="text-[11px] text-violet-200/80">{e.detail}</div>
+                )}
                 <div className="text-[11px] text-[var(--muted)]">
                   {e.kind} · {new Date(e.createdAt).toLocaleString()}
                 </div>
@@ -553,6 +638,7 @@ export function AutomationPanel() {
               <li key={q.id} className="flex justify-between gap-2 py-2">
                 <span className="truncate">
                   {q.fanHandle || q.fanUserUuid}
+                  {q.ppvItemId ? " · PPV" : ""}
                 </span>
                 <span
                   className={`badge ${

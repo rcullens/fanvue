@@ -10,6 +10,10 @@ type Props = {
   onPersonaMetaChange?: (p: Persona) => void;
 };
 
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 export function ChatPanel({ personas, activePersonaId, onPersonaMetaChange }: Props) {
   const [personaId, setPersonaId] = useState<string | null>(activePersonaId);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -17,6 +21,7 @@ export function ChatPanel({ personas, activePersonaId, onPersonaMetaChange }: Pr
   const [busy, setBusy] = useState(false);
   const [source, setSource] = useState<"mock" | "openai" | null>(null);
   const [openaiConfigured, setOpenaiConfigured] = useState(false);
+  const [typingLabel, setTypingLabel] = useState("typing");
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const persona = personas.find((p) => p.id === personaId) ?? null;
@@ -52,6 +57,7 @@ export function ChatPanel({ personas, activePersonaId, onPersonaMetaChange }: Pr
     const content = input.trim();
     setInput("");
     setBusy(true);
+    setTypingLabel("typing");
     const optimistic: ChatMessage = {
       id: "tmp-" + Date.now(),
       role: "user",
@@ -67,6 +73,16 @@ export function ChatPanel({ personas, activePersonaId, onPersonaMetaChange }: Pr
       });
       const json = await res.json();
       if (res.ok) {
+        // Pace typing dots proportional to reply length before revealing
+        const typingMs = Math.min(
+          4200,
+          Math.max(550, Number(json.typingMs) || 800)
+        );
+        const bubbleCount = Array.isArray(json.bubbles)
+          ? json.bubbles.length
+          : 1;
+        if (bubbleCount > 1) setTypingLabel("writing a few…");
+        await sleep(typingMs);
         setMessages(json.messages);
         setSource(json.source);
       } else {
@@ -75,6 +91,7 @@ export function ChatPanel({ personas, activePersonaId, onPersonaMetaChange }: Pr
       }
     } finally {
       setBusy(false);
+      setTypingLabel("typing");
     }
   }
 
@@ -161,9 +178,10 @@ export function ChatPanel({ personas, activePersonaId, onPersonaMetaChange }: Pr
             </div>
           )}
           <p className="pt-1 leading-relaxed">
-            Default is free local mock. Optional free/cheap endpoints via{" "}
+            Humanized mock: variable length, multi-bubble, fillers, typos,
+            rare emoji. Optional{" "}
             <code className="text-violet-200">OPENAI_BASE_URL</code> (Ollama,
-            Groq, Gemini compat).
+            Groq…).
           </p>
         </div>
       </aside>
@@ -175,7 +193,7 @@ export function ChatPanel({ personas, activePersonaId, onPersonaMetaChange }: Pr
               {persona?.name || "Chat"} · hyperrealistic sim
             </h2>
             <p className="text-[11px] text-[var(--muted)]">
-              Occasional typos · filler · emoji · uneven length
+              Typos · filler · multi-bubble · memory · paced typing
             </p>
           </div>
           <button className="btn-secondary !py-1.5 !text-xs" onClick={clearChat}>
@@ -190,26 +208,39 @@ export function ChatPanel({ personas, activePersonaId, onPersonaMetaChange }: Pr
               <p className="mt-1 text-xs">Adult (21+) roleplay only · mock engine is free</p>
             </div>
           )}
-          {messages.map((m) => (
-            <div
-              key={m.id}
-              className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
-            >
+          {messages.map((m, idx) => {
+            const prev = messages[idx - 1];
+            const stacked =
+              m.role === "assistant" &&
+              prev?.role === "assistant" &&
+              // consecutive assistant bubbles from a multi-send
+              Date.parse(m.createdAt) - Date.parse(prev.createdAt) < 5000;
+            return (
               <div
-                className={
-                  m.role === "user" ? "chat-bubble-user" : "chat-bubble-bot"
-                }
+                key={m.id}
+                className={`flex ${m.role === "user" ? "justify-end" : "justify-start"} ${
+                  stacked ? "!mt-1" : ""
+                }`}
               >
-                {m.content}
+                <div
+                  className={
+                    m.role === "user" ? "chat-bubble-user" : "chat-bubble-bot"
+                  }
+                >
+                  {m.content}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           {busy && (
             <div className="flex justify-start">
-              <div className="chat-bubble-bot flex items-center gap-1.5 !py-3">
+              <div className="chat-bubble-bot flex items-center gap-2 !py-3">
                 <span className="typing-dot" />
                 <span className="typing-dot [animation-delay:150ms]" />
                 <span className="typing-dot [animation-delay:300ms]" />
+                <span className="ml-1 text-[10px] text-[var(--muted)]">
+                  {typingLabel}
+                </span>
               </div>
             </div>
           )}

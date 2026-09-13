@@ -26,6 +26,13 @@ Automation **fully works in mock** without Fanvue credentials (Simulate fan mess
 | **Maintainer** | Mock / Checklist / **Live Fanvue** adapters; honest remote writes only |
 | **OAuth** | PKCE mandatory; encrypted token file; refresh rotation |
 
+
+## Recent upgrades (Chat · PPV · Live unread)
+
+1. **More human chat** — mock/OpenAI replies use conversation memory, variable length, occasional multi-bubble splits, mistakeRate-tied typos/fillers, sparse emoji, self-corrections (`*word`), and UI typing delay paced to reply length. Tone slider still drives SFW→XXX. Default remains $0 mock.
+2. **Smarter PPV pitching** — policy respects min messages (never first), cooldown, max/day, quiet hours; pitch style tease→soft→direct by tone; natural copy around catalog items; queue shows **why pitched / why not**. `allowAutoSend` still defaults false.
+3. **Live unread pull** — Automation → **Pull unread & draft** lists Fanvue unread chats when OAuth is connected, drafts via the worker, enqueues for approval (no auto-send unless enabled). Empty inbox / auth / rate-limit errors surface clearly. Simulate path stays for $0 testing.
+
 ## Fanvue OAuth setup
 
 1. In Fanvue: **Creator Tools → Build** create **your own** OAuth app (KYC required). Do **not** paste client secrets into chat.

@@ -18,7 +18,8 @@ export async function POST(req: NextRequest) {
   try {
     if (action === "simulate") {
       const fanUserUuid =
-        String(body.fanUserUuid || "") || `mock-fan-${crypto.randomUUID().slice(0, 8)}`;
+        String(body.fanUserUuid || "") ||
+        `mock-fan-${crypto.randomUUID().slice(0, 8)}`;
       const text =
         String(body.text || "").trim() ||
         "hey :) how are you doing tonight?";
@@ -46,17 +47,36 @@ export async function POST(req: NextRequest) {
         personaId: body.personaId,
         limit: Number(body.limit) || 10,
       });
-      if (result.error && result.processed === 0) {
+
+      if (result.error && result.processed === 0 && !result.empty) {
+        const status =
+          /auth|connect|expired|401/i.test(result.error)
+            ? 401
+            : /rate limit|429/i.test(result.error)
+              ? 429
+              : 400;
         return NextResponse.json(
-          { ok: false, error: result.error, items: [] },
-          { status: 400 }
+          {
+            ok: false,
+            error: result.error,
+            items: [],
+            processed: 0,
+          },
+          { status }
         );
       }
+
       return NextResponse.json({
         ok: true,
         mode: "live",
         processed: result.processed,
         items: result.items,
+        empty: Boolean(result.empty) || result.processed === 0,
+        skipped: result.skipped ?? 0,
+        message:
+          result.processed === 0
+            ? "No unread chats to draft (inbox clear, or last messages were yours)."
+            : `Drafted ${result.processed} unread chat(s) for approval.`,
       });
     }
 

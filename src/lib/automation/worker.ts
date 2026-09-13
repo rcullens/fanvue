@@ -44,6 +44,23 @@ function logEntry(
   };
 }
 
+function friendlyFanvueError(err: unknown): string {
+  if (err instanceof FanvueApiError) {
+    if (err.status === 401) {
+      return "Fanvue auth expired — reconnect OAuth in Maintainer";
+    }
+    if (err.status === 403) {
+      return "Fanvue forbidden — check chat scopes (read:chat / write:chat)";
+    }
+    if (err.status === 429) {
+      return "Fanvue rate limit — wait a bit, then retry Pull unread";
+    }
+    return err.message || `Fanvue API ${err.status}`;
+  }
+  if (err instanceof Error) return err.message;
+  return "Unknown Fanvue error";
+}
+
 async function fetchLiveHistory(
   fanUserUuid: string,
   myUuid?: string
@@ -121,7 +138,6 @@ export async function processInboundMessage(
     history = store.chatSessions[persona.id]?.messages?.slice(-16) || [];
   }
 
-  // Count this inbound toward session history for drafting context
   const inboundMsg: ChatMessage = {
     id: crypto.randomUUID(),
     role: "user",
@@ -162,6 +178,8 @@ export async function processInboundMessage(
     ppvItemId: catalogItem?.id ?? null,
     ppvPriceCents: catalogItem?.priceCents ?? null,
     ppvMediaUuids: catalogItem?.mediaUuids,
+    policyReason: draft.policyReason || pitch.reason,
+    pitchStyle: draft.pitchStyle || (pitch.pitch ? pitch.style : undefined),
     status: "pending",
     mode,
     source: input.source || "manual",
@@ -189,12 +207,7 @@ export async function processInboundMessage(
         autoSent = true;
         if (catalogItem) fanState = bumpFanOffer(fanState);
       } catch (err) {
-        const msg =
-          err instanceof FanvueApiError
-            ? err.message
-            : err instanceof Error
-              ? err.message
-              : "Send failed";
+        const msg = friendlyFanvueError(err);
         queueItem = {
           ...queueItem,
           status: "failed",
@@ -203,7 +216,6 @@ export async function processInboundMessage(
         };
       }
     } else {
-      // Mock auto-send: mark sent locally, no remote claim
       queueItem = {
         ...queueItem,
         status: "sent",
@@ -213,8 +225,6 @@ export async function processInboundMessage(
       autoSent = true;
       if (catalogItem) fanState = bumpFanOffer(fanState);
     }
-  } else if (catalogItem) {
-    // Pending approval still reserves cooldown only after approve+send
   }
 
   await updateStore((s) => {
@@ -223,18 +233,17 @@ export async function processInboundMessage(
     s.automationQueue = s.automationQueue.slice(0, 200);
     s.automationLog.unshift(
       logEntry({
-        kind: autoSent ? "send" : "draft",
+        kind: autoSent ? "send" : pitch.pitch ? "draft" : "policy_block",
         summary: autoSent
           ? `Auto-sent to ${input.fanHandle || fanKey} (${mode})`
           : `Draft queued for ${input.fanHandle || fanKey} (${mode})${
-              catalogItem ? ` +PPV ${catalogItem.title}` : ""
+              catalogItem ? ` +PPV ${catalogItem.title}` : " · reply-only"
             }`,
-        detail: pitch.pitch ? pitch.reason : pitch.reason,
+        detail: pitch.reason,
         queueId: queueItem.id,
       })
     );
     s.automationLog = s.automationLog.slice(0, 300);
-    // Keep a local sim thread for mock
     if (mode === "mock") {
       const sess = s.chatSessions[persona.id] || {
         personaId: persona.id,
@@ -261,7 +270,13 @@ export async function processInboundMessage(
 export async function pullUnreadAndDraft(opts?: {
   personaId?: string;
   limit?: number;
-}): Promise<{ processed: number; items: AutomationQueueItem[]; error?: string }> {
+}): Promise<{
+  processed: number;
+  items: AutomationQueueItem[];
+  error?: string;
+  empty?: boolean;
+  skipped?: number;
+}> {
   const tokens = await loadTokens();
   if (!tokens) {
     return {
@@ -272,19 +287,61 @@ export async function pullUnreadAndDraft(opts?: {
     };
   }
 
-  const data = await fanvueFetch<{
+  let data: {
     data: Array<{
       user?: { uuid: string; handle?: string; displayName?: string };
       lastMessage?: { text?: string | null; senderUuid?: string };
+      unreadMessagesCount?: number;
     }>;
-  }>("/chats?filter=unread&page=1&size=50");
+  };
 
-  const chats = (data.data || []).slice(0, opts?.limit ?? 10);
+  try {
+    data = await fanvueFetch<typeof data>(
+      "/chats?filter=unread&page=1&size=50"
+    );
+  } catch (err) {
+    const msg = friendlyFanvueError(err);
+    await updateStore((s) => {
+      s.automationLog.unshift(
+        logEntry({
+          kind: "error",
+          summary: "Unread pull failed",
+          detail: msg,
+        })
+      );
+    });
+    return { processed: 0, items: [], error: msg };
+  }
+
+  const all = data.data || [];
+  if (!all.length) {
+    await updateStore((s) => {
+      s.automationLog.unshift(
+        logEntry({
+          kind: "run",
+          summary: "Unread pull — no unread chats",
+        })
+      );
+    });
+    return {
+      processed: 0,
+      items: [],
+      empty: true,
+      error: undefined,
+    };
+  }
+
+  const chats = all.slice(0, opts?.limit ?? 10);
   const items: AutomationQueueItem[] = [];
+  let skipped = 0;
+  let lastErr: string | undefined;
 
   for (const chat of chats) {
     const uuid = chat.user?.uuid;
-    if (!uuid) continue;
+    if (!uuid) {
+      skipped += 1;
+      continue;
+    }
     const text =
       chat.lastMessage?.text?.trim() ||
       "(fan sent media / empty text — still drafting a check-in)";
@@ -293,30 +350,47 @@ export async function pullUnreadAndDraft(opts?: {
       tokens.profile?.uuid &&
       chat.lastMessage?.senderUuid === tokens.profile.uuid
     ) {
+      skipped += 1;
       continue;
     }
-    const { queueItem } = await processInboundMessage({
-      fanUserUuid: uuid,
-      inboundText: text,
-      fanHandle: chat.user?.handle,
-      fanDisplayName: chat.user?.displayName,
-      personaId: opts?.personaId,
-      preferLive: true,
-      source: "unread-pull",
-    });
-    items.push(queueItem);
+    try {
+      const { queueItem } = await processInboundMessage({
+        fanUserUuid: uuid,
+        inboundText: text,
+        fanHandle: chat.user?.handle,
+        fanDisplayName: chat.user?.displayName,
+        personaId: opts?.personaId,
+        preferLive: true,
+        source: "unread-pull",
+      });
+      items.push(queueItem);
+    } catch (err) {
+      lastErr = friendlyFanvueError(err);
+      // Stop hard on auth / rate limit
+      if (err instanceof FanvueApiError && (err.status === 401 || err.status === 429)) {
+        break;
+      }
+      skipped += 1;
+    }
   }
 
   await updateStore((s) => {
     s.automationLog.unshift(
       logEntry({
         kind: "run",
-        summary: `Unread pull drafted ${items.length} chat(s)`,
+        summary: `Unread pull drafted ${items.length} chat(s)${
+          skipped ? `, skipped ${skipped}` : ""
+        }`,
+        detail: lastErr,
       })
     );
   });
 
-  return { processed: items.length, items };
+  if (!items.length && lastErr) {
+    return { processed: 0, items: [], error: lastErr, skipped };
+  }
+
+  return { processed: items.length, items, skipped, empty: items.length === 0 };
 }
 
 export async function approveQueueItem(
@@ -353,8 +427,7 @@ export async function approveQueueItem(
         remoteMessageUuid: result.messageUuid,
       };
     } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : "Live send failed";
+      const msg = friendlyFanvueError(err);
       updated = { ...updated, status: "failed", error: msg };
       await updateStore((s) => {
         const i = s.automationQueue.findIndex((q) => q.id === id);

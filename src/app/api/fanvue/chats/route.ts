@@ -63,14 +63,18 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (err) {
-    const msg =
+    let msg =
       err instanceof FanvueApiError
         ? err.message
         : err instanceof Error
           ? err.message
           : "Chat fetch failed";
     const status = err instanceof FanvueApiError ? err.status : 500;
-    return NextResponse.json({ error: msg }, { status });
+    if (err instanceof FanvueApiError) {
+      if (err.status === 401) msg = "Fanvue auth expired — reconnect OAuth";
+      else if (err.status === 429) msg = "Fanvue rate limit — retry shortly";
+    }
+    return NextResponse.json({ error: msg, ok: false }, { status });
   }
 }
 
@@ -187,13 +191,17 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (err) {
-    const msg =
+    let msg =
       err instanceof FanvueApiError
         ? err.message
         : err instanceof Error
           ? err.message
           : "Chat action failed";
     const status = err instanceof FanvueApiError ? err.status : 500;
+    if (err instanceof FanvueApiError) {
+      if (err.status === 401) msg = "Fanvue auth expired — reconnect OAuth";
+      else if (err.status === 429) msg = "Fanvue rate limit — retry shortly";
+    }
     return NextResponse.json({ error: msg, ok: false, remote: false }, { status });
   }
 }

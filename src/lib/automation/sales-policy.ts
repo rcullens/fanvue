@@ -1,6 +1,7 @@
 /**
  * Policy layer: reply-only vs reply+PPV. Never pitch when blocked.
- * LLM writes the line; this module decides IF a pitch is allowed.
+ * Never pitch on the first message. Tone picks tease → soft → direct.
+ * LLM writes the line; this module decides IF a pitch is allowed + style.
  */
 import {
   FanSalesState,
@@ -10,9 +11,11 @@ import {
   DEFAULT_SALES_POLICY,
 } from "../types";
 
+export type PitchStyle = "tease" | "soft" | "direct";
+
 export type PitchDecision =
-  | { pitch: false; reason: string }
-  | { pitch: true; item: PpvCatalogItem; reason: string };
+  | { pitch: false; reason: string; style?: undefined }
+  | { pitch: true; item: PpvCatalogItem; reason: string; style: PitchStyle };
 
 function todayKey(d = new Date()): string {
   return d.toISOString().slice(0, 10);
@@ -36,11 +39,21 @@ function inQuietHours(policy: SalesPolicy, now = new Date()): boolean {
 }
 
 export function getSalesPolicy(persona: Persona): SalesPolicy {
-  return {
+  const merged = {
     ...DEFAULT_SALES_POLICY,
     ...(persona.salesPolicy || {}),
     allowAutoSend: persona.salesPolicy?.allowAutoSend === true,
   };
+  // Hard floor: never allow pitching before at least 2 messages (not first msg)
+  merged.minMessagesBeforePitch = Math.max(2, merged.minMessagesBeforePitch || 2);
+  return merged;
+}
+
+/** Map content tone → pitch intensity */
+export function pickPitchStyle(tone: number): PitchStyle {
+  if (tone < 35) return "tease";
+  if (tone < 70) return "soft";
+  return "direct";
 }
 
 export function decidePitch(opts: {
@@ -52,9 +65,11 @@ export function decidePitch(opts: {
   const policy = getSalesPolicy(opts.persona);
   const now = opts.now || new Date();
   const catalog = (opts.catalog || []).filter((i) => i.priceCents >= 300);
+  const tone = opts.persona.contentTone ?? 25;
+  const style = pickPitchStyle(tone);
 
   if (!catalog.length) {
-    return { pitch: false, reason: "Empty PPV catalog" };
+    return { pitch: false, reason: "Empty PPV catalog — reply only" };
   }
   if (inQuietHours(policy, now)) {
     return { pitch: false, reason: "Quiet hours — reply only" };
@@ -65,6 +80,14 @@ export function decidePitch(opts: {
   const messageCount = state?.messageCount ?? 0;
   const offersToday =
     state && state.offersDayKey === day ? state.offersToday : 0;
+
+  // Explicit first-message guard (messageCount is bumped before decidePitch)
+  if (messageCount < 2) {
+    return {
+      pitch: false,
+      reason: `Never pitch on first message (have ${messageCount})`,
+    };
+  }
 
   if (messageCount < policy.minMessagesBeforePitch) {
     return {
@@ -98,12 +121,21 @@ export function decidePitch(opts: {
     }
   }
 
+  // Soften frequency at low tone: only pitch ~half the time when tease style
+  if (style === "tease" && Math.random() > 0.55) {
+    return {
+      pitch: false,
+      reason: "Low tone — skipped pitch this turn (tease throttle)",
+    };
+  }
+
   // Rotate through catalog by offer count
   const item = catalog[offersToday % catalog.length];
   return {
     pitch: true,
     item,
-    reason: `Policy allows pitch → ${item.title}`,
+    style,
+    reason: `Policy allows ${style} pitch → "${item.title}" ($${(item.priceCents / 100).toFixed(2)})`,
   };
 }
 
