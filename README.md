@@ -163,6 +163,15 @@ Or after cloning: `bash scripts/termux-install.sh`
 
 Options: `SKIP_RUN=1`, `SKIP_TTS=1`, `PORT=3000`, `REPO_DIR=~/fanvue`
 
+If Next fails with `swc-android-arm64` 404:
+
+```bash
+cd ~/fanvue
+bash scripts/termux-fix-swc.sh
+npm run dev -- -H 0.0.0.0 -p 3000
+```
+
+
 ## License
 
 Private / use for your own creator tooling.

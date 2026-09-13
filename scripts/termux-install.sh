@@ -55,6 +55,14 @@ cd "$REPO_DIR"
 echo "==> npm install"
 npm install
 
+# Next.js has no official android SWC binary (404 on @next/swc-android-arm64)
+if [ "$(uname -o 2>/dev/null || true)" = "Android" ] || [ "$(node -p process.platform 2>/dev/null || true)" = "android" ]; then
+  echo "==> Fixing Next SWC for Termux/Android"
+  bash "$REPO_DIR/scripts/termux-fix-swc.sh" || bash scripts/termux-fix-swc.sh || {
+    echo "!! SWC fix failed — see scripts/termux-fix-swc.sh"
+  }
+fi
+
 if [ "${SKIP_TTS:-0}" != "1" ]; then
   echo "==> Optional TTS (edge-tts) for Video tab"
   pip install --user edge-tts 2>/dev/null || pip install edge-tts || {
