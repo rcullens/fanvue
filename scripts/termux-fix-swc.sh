@@ -1,9 +1,8 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # Fix Next.js on Termux (android/arm64).
-# npm refuses @next/swc-linux-* on os=android (EBADPLATFORM).
-# We:
-#   A) install @next/swc-wasm-nodejs with --force + NEXT_SWC_WASM=1
-#   B) curl the linux-arm64-gnu tarball and alias it as @next/swc-android-arm64
+#
+# Do NOT use @next/swc-linux-*-gnu — it needs glibc (libc.so.6) and Android is bionic.
+# Only WASM works: @next/swc-wasm-nodejs + experimental.useWasmBinary / NEXT_SWC_WASM=1
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -11,7 +10,7 @@ cd "$ROOT"
 
 TARGET_NEXT="14.2.33"
 
-echo "==> Termux SWC fix"
+echo "==> Termux SWC fix (WASM only — no glibc binaries)"
 echo "    platform=$(node -p process.platform 2>/dev/null || echo unknown) arch=$(node -p process.arch 2>/dev/null || echo unknown)"
 
 CUR="$(node -p "require('./node_modules/next/package.json').version" 2>/dev/null || echo none)"
@@ -24,37 +23,22 @@ fi
 NEXT_VER="$(node -p "require('./node_modules/next/package.json').version")"
 echo "    using next@$NEXT_VER"
 
-echo "==> Installing @next/swc-wasm-nodejs@$NEXT_VER (--force, bypass platform)"
+# Remove any native android/linux SWC packages that will crash on bionic
+echo "==> Removing native SWC packages that break on Android/bionic"
+rm -rf \
+  node_modules/@next/swc-android-arm64 \
+  node_modules/@next/swc-linux-arm64-gnu \
+  node_modules/@next/swc-linux-arm64-musl \
+  || true
+
+echo "==> Installing @next/swc-wasm-nodejs@$NEXT_VER (--force)"
 npm install --force --no-save --no-package-lock "@next/swc-wasm-nodejs@$NEXT_VER"
+
+# Prove the package is there
+node -e "require('@next/swc-wasm-nodejs'); console.log('    wasm package loads OK')"
+
 echo "NEXT_SWC_WASM=1" > .termux-next.env
-echo "    WASM OK → wrote .termux-next.env"
-
-TMP="$(mktemp -d)"
-TGZ="$TMP/swc.tgz"
-URL="https://registry.npmjs.org/@next/swc-linux-arm64-gnu/-/swc-linux-arm64-gnu-${NEXT_VER}.tgz"
-DEST="node_modules/@next/swc-android-arm64"
-
-echo "==> Fetching linux SWC tarball (bypass npm os check)"
-echo "    $URL"
-if curl -fsSL "$URL" -o "$TGZ"; then
-  rm -rf "$DEST"
-  mkdir -p "$DEST"
-  tar -xzf "$TGZ" -C "$DEST" --strip-components=1
-  if [ -f "$DEST/package.json" ]; then
-    node -e "
-      const fs=require('fs');
-      const p=process.argv[1];
-      const j=JSON.parse(fs.readFileSync(p,'utf8'));
-      j.name='@next/swc-android-arm64';
-      delete j.os; delete j.cpu; delete j.libc;
-      fs.writeFileSync(p, JSON.stringify(j,null,2));
-    " "$DEST/package.json"
-  fi
-  echo "    Aliased → @next/swc-android-arm64"
-else
-  echo "!! tarball download failed — WASM-only may still work with NEXT_SWC_WASM=1"
-fi
-rm -rf "$TMP"
+echo "    wrote .termux-next.env"
 
 echo ""
 echo "Done. Start with:"
