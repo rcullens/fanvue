@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { ChatMessage, Persona } from "@/lib/types";
 import { ToneSlider } from "./ToneSlider";
 
@@ -14,6 +14,16 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+async function readJsonSafe(res: Response): Promise<any | null> {
+  const raw = await res.text();
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
 export function ChatPanel({ personas, activePersonaId, onPersonaMetaChange }: Props) {
   const [personaId, setPersonaId] = useState<string | null>(activePersonaId);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -22,14 +32,22 @@ export function ChatPanel({ personas, activePersonaId, onPersonaMetaChange }: Pr
   const [source, setSource] = useState<"mock" | "openai" | null>(null);
   const [openaiConfigured, setOpenaiConfigured] = useState(false);
   const [typingLabel, setTypingLabel] = useState("typing");
+  const [toneLocal, setToneLocal] = useState<number | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const toneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toneAbortRef = useRef<AbortController | null>(null);
 
   const persona = personas.find((p) => p.id === personaId) ?? null;
+  const toneValue = toneLocal ?? persona?.contentTone ?? 35;
 
   useEffect(() => {
     if (activePersonaId) setPersonaId(activePersonaId);
     else if (personas[0]) setPersonaId(personas[0].id);
   }, [activePersonaId, personas]);
+
+  useEffect(() => {
+    if (persona) setToneLocal(persona.contentTone);
+  }, [persona?.id, persona?.contentTone]);
 
   useEffect(() => {
     if (!personaId) return;
@@ -106,16 +124,32 @@ export function ChatPanel({ personas, activePersonaId, onPersonaMetaChange }: Pr
     setSource(null);
   }
 
-  async function updateTone(v: number) {
-    if (!persona) return;
-    const res = await fetch(`/api/personas/${persona.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "tone", contentTone: v }),
-    });
-    const json = await res.json();
-    if (res.ok && json.persona) onPersonaMetaChange?.(json.persona);
-  }
+  const updateTone = useCallback(
+    (v: number) => {
+      if (!persona) return;
+      setToneLocal(v);
+      if (toneTimerRef.current) clearTimeout(toneTimerRef.current);
+      toneTimerRef.current = setTimeout(async () => {
+        toneAbortRef.current?.abort();
+        const ac = new AbortController();
+        toneAbortRef.current = ac;
+        try {
+          const res = await fetch(`/api/personas/${persona.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "tone", contentTone: v }),
+            signal: ac.signal,
+          });
+          const json = await readJsonSafe(res);
+          if (res.ok && json?.persona) onPersonaMetaChange?.(json.persona);
+        } catch (err) {
+          if (err instanceof DOMException && err.name === "AbortError") return;
+          // Ignore empty/aborted responses from rapid slider moves
+        }
+      }, 180);
+    },
+    [persona, onPersonaMetaChange]
+  );
 
   if (!personas.length) {
     return (
@@ -156,7 +190,7 @@ export function ChatPanel({ personas, activePersonaId, onPersonaMetaChange }: Pr
           )}
         </div>
 
-        {persona && <ToneSlider value={persona.contentTone} onChange={updateTone} />}
+        {persona && <ToneSlider value={toneValue} onChange={updateTone} />}
 
         <div className="card space-y-2 p-4 text-xs text-[var(--muted)]">
           <div className="flex justify-between">
