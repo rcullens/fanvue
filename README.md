@@ -149,6 +149,20 @@ See `.env.local.example` for the full list (OpenAI-compatible, Fanvue OAuth, web
 
 Next.js 14 App Router · TypeScript · Tailwind · JSON file store · no paid deps.
 
+
+## Termux (Android)
+
+All-in-one install + run:
+
+```bash
+pkg install -y curl
+curl -fsSL https://raw.githubusercontent.com/rcullens/fanvue/main/scripts/termux-install.sh | bash
+```
+
+Or after cloning: `bash scripts/termux-install.sh`
+
+Options: `SKIP_RUN=1`, `SKIP_TTS=1`, `PORT=3000`, `REPO_DIR=~/fanvue`
+
 ## License
 
 Private / use for your own creator tooling.
