@@ -152,6 +152,18 @@ Next.js 14 App Router · TypeScript · Tailwind · JSON file store · no paid de
 
 ## Termux (Android)
 
+### Termux: recommended = Ubuntu proot
+
+Plain Termux Node often cannot load Next SWC (no android binary; glibc mismatch). Easiest reliable path:
+
+```bash
+pkg install -y proot-distro
+bash scripts/termux-proot-ubuntu.sh
+```
+
+Then inside Ubuntu follow the printed `apt` / `npm` steps.
+
+
 All-in-one install + run:
 
 ```bash
