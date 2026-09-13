@@ -1,0 +1,104 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #0b0d12;
+  --foreground: #e8eaef;
+  --card: #12151d;
+  --card-border: #1e2433;
+  --muted: #8b93a7;
+  --accent: #a78bfa;
+  --accent-2: #f472b6;
+  --danger: #f87171;
+  --success: #34d399;
+  --warning: #fbbf24;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  color: var(--foreground);
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(167, 139, 250, 0.12), transparent 50%),
+    radial-gradient(900px 500px at 90% 0%, rgba(244, 114, 182, 0.1), transparent 45%),
+    var(--background);
+  min-height: 100vh;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border bg-[var(--card)] border-[var(--card-border)] shadow-xl shadow-black/20;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition
+      focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/60 disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-primary {
+    @apply btn bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white hover:opacity-95;
+  }
+  .btn-secondary {
+    @apply btn bg-white/5 hover:bg-white/10 border border-white/10 text-white;
+  }
+  .btn-danger {
+    @apply btn bg-rose-500/15 text-rose-300 hover:bg-rose-500/25 border border-rose-500/30;
+  }
+  .input {
+    @apply w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white placeholder:text-white/35
+      focus:outline-none focus:ring-2 focus:ring-violet-400/40;
+  }
+  .label {
+    @apply block text-xs font-medium uppercase tracking-wide text-[var(--muted)] mb-1.5;
+  }
+  .badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+}
+
+/* Custom range slider */
+input[type="range"].tone-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #34d399, #a78bfa, #f472b6, #fb7185);
+  outline: none;
+}
+input[type="range"].tone-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: white;
+  border: 3px solid #a78bfa;
+  box-shadow: 0 0 0 4px rgba(167, 139, 250, 0.25);
+  cursor: pointer;
+}
+input[type="range"].tone-slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: white;
+  border: 3px solid #a78bfa;
+  cursor: pointer;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a3144;
+  border-radius: 8px;
+}
