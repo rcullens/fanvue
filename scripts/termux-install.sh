@@ -87,6 +87,14 @@ if [ "${SKIP_RUN:-0}" = "1" ]; then
   exit 0
 fi
 
+if [ -f .termux-next.env ]; then
+  set -a
+  # shellcheck disable=SC1091
+  source .termux-next.env
+  set +a
+fi
+
 echo "==> Starting Next.js on http://${HOST}:${PORT}"
 echo "    Stop with Ctrl+C"
+echo "    NEXT_SWC_WASM=${NEXT_SWC_WASM:-0}"
 exec npm run dev -- -H "$HOST" -p "$PORT"

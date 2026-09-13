@@ -53,3 +53,4 @@ data/media/audio/*
 !data/media/audio/.gitkeep
 data/media/tmp/*
 !data/media/tmp/.gitkeep
+.termux-next.env

@@ -165,11 +165,18 @@ Options: `SKIP_RUN=1`, `SKIP_TTS=1`, `PORT=3000`, `REPO_DIR=~/fanvue`
 
 If Next fails with `swc-android-arm64` 404:
 
+If SWC still fails on Termux:
+
 ```bash
 cd ~/fanvue
+git pull
 bash scripts/termux-fix-swc.sh
+set -a; source .termux-next.env; set +a
 npm run dev -- -H 0.0.0.0 -p 3000
 ```
+
+We pin Next to **14.2.33** on Termux because npm has SWC builds for that version (not for 14.2.35). WASM fallback is enabled via `NEXT_SWC_WASM=1`.
+
 
 
 ## License
