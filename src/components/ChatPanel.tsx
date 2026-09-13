@@ -14,11 +14,11 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-async function readJsonSafe(res: Response): Promise<any | null> {
+async function readJsonSafe(res: Response): Promise<unknown> {
   const raw = await res.text();
   if (!raw) return null;
   try {
-    return JSON.parse(raw);
+    return JSON.parse(raw) as unknown;
   } catch {
     return null;
   }
@@ -47,7 +47,7 @@ export function ChatPanel({ personas, activePersonaId, onPersonaMetaChange }: Pr
 
   useEffect(() => {
     if (persona) setToneLocal(persona.contentTone);
-  }, [persona?.id, persona?.contentTone]);
+  }, [persona]);
 
   useEffect(() => {
     if (!personaId) return;
@@ -141,7 +141,8 @@ export function ChatPanel({ personas, activePersonaId, onPersonaMetaChange }: Pr
             signal: ac.signal,
           });
           const json = await readJsonSafe(res);
-          if (res.ok && json?.persona) onPersonaMetaChange?.(json.persona);
+          const personaOut = (json as { persona?: Persona } | null)?.persona;
+          if (res.ok && personaOut) onPersonaMetaChange?.(personaOut);
         } catch (err) {
           if (err instanceof DOMException && err.name === "AbortError") return;
           // Ignore empty/aborted responses from rapid slider moves

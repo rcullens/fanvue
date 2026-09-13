@@ -11,6 +11,8 @@ export interface PpvCatalogItem {
   /** Price in USD cents; Fanvue message PPV min 300 ($3.00) */
   priceCents: number;
   mediaUuids?: string[];
+  /** Local studio video job that produced this clip */
+  videoJobId?: string;
   pitchHints?: string;
 }
 
@@ -60,6 +62,10 @@ export interface Persona {
   ppvCatalog: PpvCatalogItem[];
   /** When/whether to pitch PPV + auto-send */
   salesPolicy: SalesPolicy;
+  /** Relative path under data/media for talking-head portrait */
+  portraitPath?: string;
+  /** Preferred free TTS voice id (edge-tts) */
+  voiceId?: string;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -188,6 +194,30 @@ export interface FanSalesState {
   lastPurchaseAt?: string;
 }
 
+
+export type VideoJobStatus = "pending" | "running" | "done" | "failed";
+
+export type VideoProviderId = "local-ffmpeg" | "external-cli" | "replicate";
+
+export interface VideoJob {
+  id: string;
+  personaId: string;
+  script: string;
+  status: VideoJobStatus;
+  provider: VideoProviderId;
+  providerLabel?: string;
+  voiceId?: string;
+  ttsEngine?: "edge-tts" | "espeak-ng" | "silence-placeholder";
+  audioPath?: string;
+  videoPath?: string;
+  error?: string;
+  fanvueMediaUuid?: string;
+  fanvueMediaStatus?: string;
+  ppvCatalogItemId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface StoreData {
   personas: Persona[];
   chatSessions: Record<string, ChatSession>;
@@ -197,6 +227,8 @@ export interface StoreData {
   automationLog: AutomationLogEntry[];
   /** Per-fan sales counters for policy */
   fanSales: Record<string, FanSalesState>;
+  /** Lifelike video bot render jobs */
+  videoJobs: VideoJob[];
 }
 
 export const DEFAULT_PRICING: PricingConfig = {

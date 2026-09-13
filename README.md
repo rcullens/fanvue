@@ -24,6 +24,7 @@ Automation **fully works in mock** without Fanvue credentials (Simulate fan mess
 | **Chat** | Hyperrealistic sim; mock by default |
 | **Automation** | Shared engine + many packs; sales policy; PPV catalog; approval queue; webhook stub |
 | **Maintainer** | Mock / Checklist / **Live Fanvue** adapters; honest remote writes only |
+| **Video** | Lifelike bots: free TTS + local ffmpeg Ken Burns preview ($0); optional GPU CLI / Fanvue `write:media` upload |
 | **OAuth** | PKCE mandatory; encrypted token file; refresh rotation |
 
 
@@ -68,6 +69,47 @@ Every API call sends `Authorization: Bearer …` and `X-Fanvue-API-Version: 2025
 - Manual: Automation → **Pull unread & draft** (`GET /chats?filter=unread` … draft → approve → `POST /chats/{userUuid}/message`).
 - PPV: message body may include `price` (≥300¢) + optional `mediaUuids`.
 - Default **`allowAutoSend: false`** — no silent spam.
+
+
+## Video bots
+
+Local **$0** talking-head *preview* (not neural lip-sync):
+
+1. Open **Video** nav → pick persona → upload portrait (or use sample) → enter script → choose free TTS voice → **Generate**.
+2. Pipeline (`src/lib/video/`):
+   - `tts.ts` — prefers `edge-tts` in `.venv-tts` (created locally; gitignored). Falls back to `espeak-ng`, then ffmpeg silence + burned-in captions.
+   - `render.ts` — still portrait + Ken Burns zoom + audio + soft subtitles via **ffmpeg**.
+   - `providers.ts` — `local-ffmpeg` (default), `external-cli` (`VIDEO_RENDER_CMD`), `replicate` stub (document only).
+   - `jobs.ts` — JSON queue in `data/store.json` (`pending|running|done|failed`); sync process in API for v1.
+   - `fanvue-upload.ts` — multipart upload for creator (`mediaType: video`); needs `write:media` (+ `write:creator`).
+3. Outputs: portraits under `data/media/portraits/`, MP4 under `data/media/videos/`, audio under `data/media/audio/`. Served via `GET /api/video/file?path=` (sandboxed to `data/media`).
+4. UI can **Add to PPV catalog** (title + price cents ≥ 300) and optionally **Upload to Fanvue**.
+
+### GPU / neural lip-sync (not on this machine)
+
+This box has **no NVIDIA GPU** — do **not** install SadTalker models here. On a GPU machine:
+
+```bash
+# Example — set in .env.local on the GPU host
+VIDEO_PROVIDER=external-cli
+VIDEO_RENDER_CMD='python /path/to/SadTalker/inference.py --source_image {image} --driven_audio {audio} --result_dir /tmp/sadtalker && cp /tmp/sadtalker/*/result.mp4 {out}'
+```
+
+Placeholders: `{image}` `{audio}` `{out}`. Until then, the UI honestly labels renders as local preview (not lip-sync).
+
+### Fanvue media scope
+
+Add `write:media` in Creator Tools → Build scopes (keep `write:creator` for creator upload endpoints), put it in `FANVUE_SCOPES`, reconnect OAuth. Without it, upload returns a clear error + checklist.
+
+### Cost notes
+
+| Piece | Cost |
+|-------|------|
+| edge-tts | Free (Microsoft Edge online TTS) |
+| local-ffmpeg preview | $0 |
+| espeak / silence fallback | $0 |
+| SadTalker on your GPU | electricity / your hardware |
+| Replicate (optional later) | paid per run — stub only |
 
 ## Automation worker
 

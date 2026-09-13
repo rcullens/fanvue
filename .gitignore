@@ -40,3 +40,16 @@ data/store.json
 data/*.tmp
 data/fanvue-tokens.json
 data/fanvue-tokens.json.tmp
+
+# TTS venv (edge-tts)
+.venv-tts/
+
+# Generated media (keep directory placeholders via .gitkeep)
+data/media/portraits/*
+!data/media/portraits/.gitkeep
+data/media/videos/*
+!data/media/videos/.gitkeep
+data/media/audio/*
+!data/media/audio/.gitkeep
+data/media/tmp/*
+!data/media/tmp/.gitkeep

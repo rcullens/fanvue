@@ -36,6 +36,7 @@ function defaultStore(): StoreData {
     automationQueue: [],
     automationLog: [],
     fanSales: {},
+    videoJobs: [],
   };
 }
 
@@ -67,6 +68,7 @@ function migrate(parsed: Partial<StoreData>): StoreData {
     automationQueue: parsed.automationQueue || [],
     automationLog: parsed.automationLog || [],
     fanSales: parsed.fanSales || {},
+    videoJobs: parsed.videoJobs || [],
   };
 }
 

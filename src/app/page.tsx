@@ -21,6 +21,9 @@ export default function HomePage() {
             <Link href="/personas" className="btn-primary">
               Open Personas
             </Link>
+            <Link href="/video" className="btn-secondary">
+              Video
+            </Link>
             <Link href="/automation" className="btn-secondary">
               Automation
             </Link>
@@ -31,7 +34,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {[
           {
             title: "Personas",
@@ -42,6 +45,11 @@ export default function HomePage() {
             title: "Chat sim",
             body: "Local mock engine free forever; optional Groq/Ollama/Gemini.",
             href: "/chat",
+          },
+          {
+            title: "Video",
+            body: "Free TTS + local ffmpeg talking-head preview; optional Fanvue upload.",
+            href: "/video",
           },
           {
             title: "Automation",

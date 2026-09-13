@@ -12,7 +12,7 @@ export function getFanvueConfig() {
     "https://localhost:3000/api/fanvue/oauth/callback";
   const scopes =
     process.env.FANVUE_SCOPES ||
-    "openid offline_access offline read:self read:creator write:creator read:insights read:chat write:chat read:fan";
+    "openid offline_access offline read:self read:creator write:creator read:insights read:chat write:chat read:fan write:media";
   const apiBase =
     process.env.FANVUE_API_BASE_URL || "https://api.fanvue.com";
   const authBase =
